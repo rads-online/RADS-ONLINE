@@ -24,8 +24,13 @@ dist-ssr
 *.sw?
 
 # Environment variables
+<<<<<<< HEAD
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+=======
+.env*
+
+>>>>>>> 68c1a5994d89b67bd8b5cacd41d6cab8993c08b0

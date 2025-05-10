@@ -124,7 +124,7 @@ function App() {
               <Route
                 path="/admin-dashboard"
                 element={
-                  user && userRole === 'admin' ? (
+                  user && isAdmin(user.email) ? (
                     <AdminDashboard />
                   ) : (
                     <Navigate to="/login" replace />

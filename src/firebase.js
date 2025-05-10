@@ -1,7 +1,7 @@
-import { initializeApp, getApp } from "firebase/app";
-import { getAuth, connectAuthEmulator } from "firebase/auth";
-import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
-import { getStorage, connectStorageEmulator } from "firebase/storage";
+import { initializeApp } from "firebase/app";
+import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -14,21 +14,12 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-let app;
-try {
-  app = initializeApp(firebaseConfig);
-} catch (error) {
-  console.error("Firebase initialization error:", error);
-  // If app is already initialized, get the existing app
-  app = getApp();
-}
-
-// Initialize services
+const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 
-// Admin email list
+// Admin emails
 export const ADMIN_EMAILS = [
   'sudharshanr2510@gmail.com',
   'r983230@gmail.com',

@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { auth, db, isAdmin, USER_ROLES, initializeAdminAccounts, handleFirebaseError } from '../firebase';
-import ForgotPasswordModal from "./ForgotPasswordModal";
+import { auth, db, isAdmin, USER_ROLES } from '../firebase';
+import ForgotPasswordModal from './ForgotPasswordModal';
 
 const Login = () => {
   const [isRegistering, setIsRegistering] = useState(false);
@@ -23,18 +23,6 @@ const Login = () => {
     affiliateLink: ''
   });
   const navigate = useNavigate();
-
-  // Initialize admin accounts on component mount
-  useEffect(() => {
-    const init = async () => {
-      try {
-        await initializeAdminAccounts();
-      } catch (error) {
-        console.error('Error initializing admin accounts:', error);
-      }
-    };
-    init();
-  }, []);
 
   const handleSellerDetailsChange = (e) => {
     const { name, value } = e.target;
@@ -382,6 +370,7 @@ const Login = () => {
           </div>
         </form>
       </div>
+
       {showForgotPassword && (
         <ForgotPasswordModal onClose={() => setShowForgotPassword(false)} />
       )}

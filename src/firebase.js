@@ -1,6 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -15,3 +16,14 @@ const app = initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+export const storage = getStorage(app);
+
+// Admin email list
+export const ADMIN_EMAILS = [
+  'sudharshanr2510@gmail.com',
+  'contactradsonline@gmail.com',
+  'r983230@gmail.com'
+];
+
+// Check if user is admin
+export const isAdmin = (email) => ADMIN_EMAILS.includes(email);

@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { auth, db, isAdmin, USER_ROLES } from '../firebase';
+import { auth, db, isAdmin, USER_ROLES, initializeAdminAccounts } from '../firebase';
 import ForgotPasswordModal from "./ForgotPasswordModal";
 
 const Login = () => {
@@ -23,6 +23,11 @@ const Login = () => {
     affiliateLink: ''
   });
   const navigate = useNavigate();
+
+  // Initialize admin accounts on component mount
+  useEffect(() => {
+    initializeAdminAccounts();
+  }, []);
 
   const handleSellerDetailsChange = (e) => {
     const { name, value } = e.target;
@@ -45,7 +50,8 @@ const Login = () => {
       if (isAdmin(user.email)) {
         await setDoc(doc(db, "users", user.uid), {
           email: user.email,
-          role: USER_ROLES.ADMIN
+          role: USER_ROLES.ADMIN,
+          lastLogin: new Date().toISOString()
         }, { merge: true });
         navigate('/admin-dashboard');
         return;
@@ -68,7 +74,8 @@ const Login = () => {
         // Set default customer role
         await setDoc(doc(db, "users", user.uid), {
           email: user.email,
-          role: USER_ROLES.CUSTOMER
+          role: USER_ROLES.CUSTOMER,
+          lastLogin: new Date().toISOString()
         }, { merge: true });
         navigate('/');
       }
@@ -92,6 +99,13 @@ const Login = () => {
     }
 
     try {
+      // Check if email is admin email
+      if (isAdmin(email)) {
+        setError('This email is reserved for admin accounts. Please use a different email.');
+        setLoading(false);
+        return;
+      }
+
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
@@ -124,7 +138,11 @@ const Login = () => {
       }
     } catch (error) {
       console.error('Registration error:', error);
-      setError('Failed to register. Please try again.');
+      if (error.code === 'auth/email-already-in-use') {
+        setError('This email is already registered. Please login instead.');
+      } else {
+        setError('Failed to register. Please try again.');
+      }
     } finally {
       setLoading(false);
     }

@@ -9,12 +9,14 @@ import ProductGrid from "./components/ProductGrid";
 import Login from "./components/Login";
 import SellerDashboard from "./components/SellerDashboard";
 import AdminDashboard from "./components/AdminDashboard";
+import DisclaimerPopup from "./components/DisclaimerPopup";
 
 function App() {
   console.log("App component rendering");
   const [user, setUser] = useState(null);
   const [userRole, setUserRole] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [disclaimerAccepted, setDisclaimerAccepted] = useState(false);
 
   useEffect(() => {
     console.log("App useEffect running");
@@ -46,43 +48,52 @@ function App() {
     );
   }
 
+  const handleDisclaimerAccept = () => {
+    setDisclaimerAccepted(true);
+  };
+
   console.log("App rendering main content");
   return (
     <Router>
       <div className="min-h-screen bg-gray-50">
-        <Navbar user={user} userRole={userRole} />
-        <Routes>
-          <Route
-            path="/"
-            element={
-              <>
-                <Hero />
-                <ProductGrid />
-              </>
-            }
-          />
-          <Route path="/login" element={<Login />} />
-          <Route
-            path="/seller-dashboard"
-            element={
-              user && userRole === "seller" ? (
-                <SellerDashboard />
-              ) : (
-                <Navigate to="/login" replace />
-              )
-            }
-          />
-          <Route
-            path="/admin-dashboard"
-            element={
-              user && userRole === "admin" ? (
-                <AdminDashboard />
-              ) : (
-                <Navigate to="/login" replace />
-              )
-            }
-          />
-        </Routes>
+        {!disclaimerAccepted && <DisclaimerPopup onAccept={handleDisclaimerAccept} />}
+        {disclaimerAccepted && (
+          <>
+            <Navbar user={user} userRole={userRole} />
+            <Routes>
+              <Route
+                path="/"
+                element={
+                  <>
+                    <Hero />
+                    <ProductGrid />
+                  </>
+                }
+              />
+              <Route path="/login" element={<Login />} />
+              <Route
+                path="/seller-dashboard"
+                element={
+                  user && userRole === "seller" ? (
+                    <SellerDashboard />
+                  ) : (
+                    <Navigate to="/login" replace />
+                  )
+                }
+              />
+              <Route
+                path="/admin-dashboard"
+                element={
+                  user && userRole === "admin" ? (
+                    <AdminDashboard />
+                  ) : (
+                    <Navigate to="/login" replace />
+                  )
+                }
+              />
+            </Routes>
+          </>
+        )}
       </div>
     </Router>
   );

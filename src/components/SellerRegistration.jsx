@@ -1,19 +1,24 @@
 import React, { useState } from 'react';
-import { db, auth } from '../firebase';
-import { collection, addDoc } from 'firebase/firestore';
-import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
+import { auth, db, USER_ROLES } from '../firebase';
 
 const SellerRegistration = () => {
-  const { currentUser } = useAuth();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+    confirmPassword: '',
     brandName: '',
-    brandDescription: '',
-    contactEmail: '',
-    contactPhone: ''
+    businessType: '',
+    website: '',
+    phone: '',
+    address: '',
+    affiliateLink: ''
   });
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -25,102 +30,215 @@ const SellerRegistration = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
-    setSuccess('');
+    setLoading(true);
+
+    // Validate form
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match');
+      setLoading(false);
+      return;
+    }
 
     try {
-      // Create seller request
-      const sellerRequest = {
-        ...formData,
-        userId: currentUser.uid,
-        userEmail: currentUser.email,
+      // Create user account
+      const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
+      const user = userCredential.user;
+
+      // Create seller request in Firestore
+      await setDoc(doc(db, "sellerRequests", user.uid), {
+        email: formData.email,
+        brandName: formData.brandName,
+        businessType: formData.businessType,
+        website: formData.website,
+        phone: formData.phone,
+        address: formData.address,
+        affiliateLink: formData.affiliateLink,
         status: 'pending',
-        createdAt: new Date()
-      };
-
-      // Add to sellerRequests collection
-      await addDoc(collection(db, 'sellerRequests'), sellerRequest);
-
-      setSuccess('Your seller registration request has been submitted. You will be notified once approved.');
-      setFormData({
-        brandName: '',
-        brandDescription: '',
-        contactEmail: '',
-        contactPhone: ''
+        createdAt: new Date().toISOString()
       });
-    } catch (err) {
-      setError('Error submitting request: ' + err.message);
+
+      // Create user document with seller role
+      await setDoc(doc(db, "users", user.uid), {
+        email: formData.email,
+        role: USER_ROLES.SELLER,
+        status: 'pending',
+        createdAt: new Date().toISOString()
+      });
+
+      navigate('/login');
+    } catch (error) {
+      console.error('Registration error:', error);
+      setError('Failed to register. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="max-w-2xl mx-auto p-6">
-      <h2 className="text-2xl font-bold mb-6">Register as a Seller</h2>
-      {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{error}</div>}
-      {success && <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">{success}</div>}
-      
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Brand Name</label>
-          <input
-            type="text"
-            name="brandName"
-            value={formData.brandName}
-            onChange={handleChange}
-            required
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#FF9900] focus:ring-[#FF9900]"
-          />
+    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md mx-auto">
+        <div className="text-center">
+          <h2 className="text-3xl font-extrabold text-gray-900">Register as a Seller</h2>
+          <p className="mt-2 text-sm text-gray-600">
+            Fill out the form below to register your business
+          </p>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Brand Description</label>
-          <textarea
-            name="brandDescription"
-            value={formData.brandDescription}
-            onChange={handleChange}
-            required
-            rows="4"
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#FF9900] focus:ring-[#FF9900]"
-          />
-        </div>
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          {error && (
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative">
+              {error}
+            </div>
+          )}
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Contact Email</label>
-          <input
-            type="email"
-            name="contactEmail"
-            value={formData.contactEmail}
-            onChange={handleChange}
-            required
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#FF9900] focus:ring-[#FF9900]"
-          />
-        </div>
+          <div className="rounded-md shadow-sm space-y-4">
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                Email address
+              </label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                required
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-[#FF9900] focus:border-[#FF9900] sm:text-sm"
+                value={formData.email}
+                onChange={handleChange}
+              />
+            </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Contact Phone</label>
-          <input
-            type="tel"
-            name="contactPhone"
-            value={formData.contactPhone}
-            onChange={handleChange}
-            required
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#FF9900] focus:ring-[#FF9900]"
-          />
-        </div>
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                Password
+              </label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                required
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-[#FF9900] focus:border-[#FF9900] sm:text-sm"
+                value={formData.password}
+                onChange={handleChange}
+              />
+            </div>
 
-        <button
-          type="submit"
-          disabled={loading}
-          className={`w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[#FF9900] hover:bg-[#FF8800] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#FF9900] ${
-            loading ? 'opacity-50 cursor-not-allowed' : ''
-          }`}
-        >
-          {loading ? 'Submitting...' : 'Submit Registration Request'}
-        </button>
-      </form>
+            <div>
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
+                Confirm Password
+              </label>
+              <input
+                id="confirmPassword"
+                name="confirmPassword"
+                type="password"
+                required
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-[#FF9900] focus:border-[#FF9900] sm:text-sm"
+                value={formData.confirmPassword}
+                onChange={handleChange}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="brandName" className="block text-sm font-medium text-gray-700">
+                Brand Name
+              </label>
+              <input
+                id="brandName"
+                name="brandName"
+                type="text"
+                required
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-[#FF9900] focus:border-[#FF9900] sm:text-sm"
+                value={formData.brandName}
+                onChange={handleChange}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="businessType" className="block text-sm font-medium text-gray-700">
+                Business Type
+              </label>
+              <input
+                id="businessType"
+                name="businessType"
+                type="text"
+                required
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-[#FF9900] focus:border-[#FF9900] sm:text-sm"
+                value={formData.businessType}
+                onChange={handleChange}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="website" className="block text-sm font-medium text-gray-700">
+                Website
+              </label>
+              <input
+                id="website"
+                name="website"
+                type="url"
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-[#FF9900] focus:border-[#FF9900] sm:text-sm"
+                value={formData.website}
+                onChange={handleChange}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
+                Phone Number
+              </label>
+              <input
+                id="phone"
+                name="phone"
+                type="tel"
+                required
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-[#FF9900] focus:border-[#FF9900] sm:text-sm"
+                value={formData.phone}
+                onChange={handleChange}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="address" className="block text-sm font-medium text-gray-700">
+                Business Address
+              </label>
+              <textarea
+                id="address"
+                name="address"
+                required
+                rows="3"
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-[#FF9900] focus:border-[#FF9900] sm:text-sm"
+                value={formData.address}
+                onChange={handleChange}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="affiliateLink" className="block text-sm font-medium text-gray-700">
+                Affiliate Link
+              </label>
+              <input
+                id="affiliateLink"
+                name="affiliateLink"
+                type="url"
+                required
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-[#FF9900] focus:border-[#FF9900] sm:text-sm"
+                value={formData.affiliateLink}
+                onChange={handleChange}
+              />
+            </div>
+          </div>
+
+          <div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[#FF9900] hover:bg-[#FF8800] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#FF9900]"
+            >
+              {loading ? 'Registering...' : 'Register as Seller'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 };

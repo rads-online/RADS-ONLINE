@@ -4,12 +4,12 @@ import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID
+  apiKey: "AIzaSyDxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXx",
+  authDomain: "rads-online.firebaseapp.com",
+  projectId: "rads-online",
+  storageBucket: "rads-online.appspot.com",
+  messagingSenderId: "123456789012",
+  appId: "1:123456789012:web:1234567890123456789012"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -19,11 +19,30 @@ export const db = getFirestore(app);
 export const storage = getStorage(app);
 
 // Admin email list
-export const ADMIN_EMAILS = [
+const ADMIN_EMAILS = [
   'sudharshanr2510@gmail.com',
-  'contactradsonline@gmail.com',
-  'r983230@gmail.com'
+  'r983230@gmail.com',
+  'contactradsonline@gmail.com'
 ];
 
 // Check if user is admin
-export const isAdmin = (email) => ADMIN_EMAILS.includes(email);
+export const isAdmin = (email) => {
+  return ADMIN_EMAILS.includes(email);
+};
+
+// User roles
+export const USER_ROLES = {
+  ADMIN: 'admin',
+  SELLER: 'seller',
+  CUSTOMER: 'customer'
+};
+
+// Check if user is seller
+export const isSeller = (role) => {
+  return role === USER_ROLES.SELLER;
+};
+
+// Check if user is customer
+export const isCustomer = (role) => {
+  return role === USER_ROLES.CUSTOMER;
+};

@@ -2,9 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import AdminNotifications from './AdminNotifications';
-import { collection, query, where, getDocs, updateDoc, doc } from "firebase/firestore";
+import { collection, query, where, getDocs, updateDoc, doc, addDoc, deleteDoc } from "firebase/firestore";
 import { db } from "../firebase";
-import { FaSpinner, FaCheck, FaTimes } from "react-icons/fa";
+import { FaSpinner, FaCheck, FaTimes, FaEdit, FaTrash } from "react-icons/fa";
 import { isAdmin } from '../firebase';
 
 const AdminDashboard = () => {
@@ -12,9 +12,10 @@ const AdminDashboard = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [activeTab, setActiveTab] = useState("sellers");
   const [sellers, setSellers] = useState([]);
   const [products, setProducts] = useState([]);
-  const [activeTab, setActiveTab] = useState("sellers");
+  const [productRequests, setProductRequests] = useState([]);
 
   useEffect(() => {
     const checkAdminAccess = async () => {
@@ -31,10 +32,11 @@ const AdminDashboard = () => {
           return;
         }
 
-        setLoading(false);
+        await fetchData();
       } catch (err) {
         console.error('Error checking admin access:', err);
         setError('Error loading admin dashboard');
+      } finally {
         setLoading(false);
       }
     };
@@ -42,25 +44,28 @@ const AdminDashboard = () => {
     checkAdminAccess();
   }, [currentUser, navigate]);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
   const fetchData = async () => {
     try {
-      // Fetch sellers
-      const usersRef = collection(db, "users");
-      const sellersQuery = query(usersRef, where("role", "==", "seller"));
-      const sellersSnapshot = await getDocs(sellersQuery);
-      const sellersList = sellersSnapshot.docs.map(doc => ({
+      // Fetch seller requests
+      const sellerRequestsQuery = query(collection(db, 'sellerRequests'), where('status', '==', 'pending'));
+      const sellerRequestsSnapshot = await getDocs(sellerRequestsQuery);
+      const sellerRequestsList = sellerRequestsSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
-      setSellers(sellersList);
+      setSellers(sellerRequestsList);
 
-      // Fetch products
-      const productsRef = collection(db, "products");
-      const productsQuery = query(productsRef, where("status", "==", "pending"));
+      // Fetch product requests
+      const productRequestsQuery = query(collection(db, 'productRequests'), where('status', '==', 'pending'));
+      const productRequestsSnapshot = await getDocs(productRequestsQuery);
+      const productRequestsList = productRequestsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setProductRequests(productRequestsList);
+
+      // Fetch approved products
+      const productsQuery = query(collection(db, 'products'));
       const productsSnapshot = await getDocs(productsQuery);
       const productsList = productsSnapshot.docs.map(doc => ({
         id: doc.id,
@@ -69,39 +74,75 @@ const AdminDashboard = () => {
       setProducts(productsList);
     } catch (error) {
       console.error("Error fetching data:", error);
-    } finally {
-      setLoading(false);
+      setError('Error loading data');
     }
   };
 
   const handleSellerApproval = async (sellerId, approved) => {
     try {
-      const sellerRef = doc(db, "users", sellerId);
-      await updateDoc(sellerRef, {
-        status: approved ? "approved" : "rejected"
-      });
-      fetchData();
+      const sellerRequestRef = doc(db, 'sellerRequests', sellerId);
+      const sellerRequest = sellers.find(s => s.id === sellerId);
+
+      if (approved) {
+        // Update seller request status
+        await updateDoc(sellerRequestRef, { status: 'approved' });
+
+        // Update user role in users collection
+        const userRef = doc(db, 'users', sellerRequest.sellerId);
+        await updateDoc(userRef, { status: 'approved' });
+      } else {
+        // Delete seller request
+        await deleteDoc(sellerRequestRef);
+      }
+
+      await fetchData();
     } catch (error) {
-      console.error("Error updating seller status:", error);
+      console.error('Error handling seller approval:', error);
+      setError('Error processing seller request');
     }
   };
 
   const handleProductApproval = async (productId, approved) => {
     try {
-      const productRef = doc(db, "products", productId);
-      await updateDoc(productRef, {
-        status: approved ? "approved" : "rejected"
-      });
-      fetchData();
+      const productRequestRef = doc(db, 'productRequests', productId);
+      const productRequest = productRequests.find(p => p.id === productId);
+
+      if (approved) {
+        // Add to products collection
+        await addDoc(collection(db, 'products'), {
+          ...productRequest,
+          status: 'approved',
+          approvedAt: new Date().toISOString()
+        });
+
+        // Update product request status
+        await updateDoc(productRequestRef, { status: 'approved' });
+      } else {
+        // Delete product request
+        await deleteDoc(productRequestRef);
+      }
+
+      await fetchData();
     } catch (error) {
-      console.error("Error updating product status:", error);
+      console.error('Error handling product approval:', error);
+      setError('Error processing product request');
+    }
+  };
+
+  const handleProductDelete = async (productId) => {
+    try {
+      await deleteDoc(doc(db, 'products', productId));
+      await fetchData();
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      setError('Error deleting product');
     }
   };
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#FF9900]"></div>
+        <FaSpinner className="animate-spin text-4xl text-[#FF9900]" />
       </div>
     );
   }
@@ -145,6 +186,16 @@ const AdminDashboard = () => {
             >
               Pending Products
             </button>
+            <button
+              onClick={() => setActiveTab("approved")}
+              className={`px-4 py-2 rounded-md ${
+                activeTab === "approved"
+                  ? "bg-[#FF9900] text-white"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+            >
+              Approved Products
+            </button>
           </div>
 
           {/* Sellers List */}
@@ -161,9 +212,6 @@ const AdminDashboard = () => {
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Website
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Actions
@@ -184,32 +232,21 @@ const AdminDashboard = () => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-500">{seller.website}</div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs rounded-full ${
-                          seller.status === "approved" ? "bg-green-100 text-green-800" :
-                          seller.status === "pending" ? "bg-yellow-100 text-yellow-800" :
-                          "bg-red-100 text-red-800"
-                        }`}>
-                          {seller.status.charAt(0).toUpperCase() + seller.status.slice(1)}
-                        </span>
-                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        {seller.status === "pending" && (
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={() => handleSellerApproval(seller.id, true)}
-                              className="text-green-600 hover:text-green-900"
-                            >
-                              <FaCheck />
-                            </button>
-                            <button
-                              onClick={() => handleSellerApproval(seller.id, false)}
-                              className="text-red-600 hover:text-red-900"
-                            >
-                              <FaTimes />
-                            </button>
-                          </div>
-                        )}
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => handleSellerApproval(seller.id, true)}
+                            className="text-green-600 hover:text-green-900"
+                          >
+                            <FaCheck />
+                          </button>
+                          <button
+                            onClick={() => handleSellerApproval(seller.id, false)}
+                            className="text-red-600 hover:text-red-900"
+                          >
+                            <FaTimes />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -218,8 +255,45 @@ const AdminDashboard = () => {
             </div>
           )}
 
-          {/* Products List */}
+          {/* Pending Products List */}
           {activeTab === "products" && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {productRequests.map(product => (
+                <div key={product.id} className="bg-white rounded-lg shadow-md p-4">
+                  <div className="aspect-w-1 aspect-h-1 mb-4">
+                    <img
+                      src={product.imageURL}
+                      alt={product.title}
+                      className="w-full h-48 object-contain"
+                    />
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">{product.title}</h3>
+                  <p className="text-gray-600 mb-2 line-clamp-2">{product.description}</p>
+                  <div className="flex justify-between items-center mb-4">
+                    <span className="text-xl font-bold text-gray-900">₹{product.price}</span>
+                    <span className="text-sm text-gray-500">Seller: {product.sellerEmail}</span>
+                  </div>
+                  <div className="flex justify-end space-x-2">
+                    <button
+                      onClick={() => handleProductApproval(product.id, true)}
+                      className="px-3 py-1 bg-green-100 text-green-800 rounded-md hover:bg-green-200 transition-colors"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => handleProductApproval(product.id, false)}
+                      className="px-3 py-1 bg-red-100 text-red-800 rounded-md hover:bg-red-200 transition-colors"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Approved Products List */}
+          {activeTab === "approved" && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {products.map(product => (
                 <div key={product.id} className="bg-white rounded-lg shadow-md p-4">
@@ -234,20 +308,14 @@ const AdminDashboard = () => {
                   <p className="text-gray-600 mb-2 line-clamp-2">{product.description}</p>
                   <div className="flex justify-between items-center mb-4">
                     <span className="text-xl font-bold text-gray-900">₹{product.price}</span>
-                    <span className="text-sm text-gray-500">Seller ID: {product.sellerId}</span>
+                    <span className="text-sm text-gray-500">Seller: {product.sellerEmail}</span>
                   </div>
                   <div className="flex justify-end space-x-2">
                     <button
-                      onClick={() => handleProductApproval(product.id, true)}
-                      className="px-3 py-1 bg-green-100 text-green-800 rounded-md hover:bg-green-200 transition-colors"
-                    >
-                      Approve
-                    </button>
-                    <button
-                      onClick={() => handleProductApproval(product.id, false)}
+                      onClick={() => handleProductDelete(product.id)}
                       className="px-3 py-1 bg-red-100 text-red-800 rounded-md hover:bg-red-200 transition-colors"
                     >
-                      Reject
+                      Delete
                     </button>
                   </div>
                 </div>

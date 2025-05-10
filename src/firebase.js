@@ -1,8 +1,9 @@
-import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
+import { initializeApp, getApp } from "firebase/app";
+import { getAuth, connectAuthEmulator } from "firebase/auth";
+import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
+import { getStorage, connectStorageEmulator } from "firebase/storage";
 
+// Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyDxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXx",
   authDomain: "rads-online.firebaseapp.com",
@@ -13,7 +14,16 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-const app = initializeApp(firebaseConfig);
+let app;
+try {
+  app = initializeApp(firebaseConfig);
+} catch (error) {
+  console.error("Firebase initialization error:", error);
+  // If app is already initialized, get the existing app
+  app = getApp();
+}
+
+// Initialize services
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
@@ -49,18 +59,50 @@ export const isCustomer = (role) => {
 
 // Initialize admin accounts
 export const initializeAdminAccounts = async () => {
-  const { doc, setDoc } = await import('firebase/firestore');
+  const { doc, setDoc, getDoc } = await import('firebase/firestore');
   
   for (const email of ADMIN_EMAILS) {
     try {
       const adminDoc = doc(db, 'users', email);
-      await setDoc(adminDoc, {
-        email,
-        role: USER_ROLES.ADMIN,
-        createdAt: new Date().toISOString()
-      }, { merge: true });
+      const adminSnapshot = await getDoc(adminDoc);
+      
+      if (!adminSnapshot.exists()) {
+        await setDoc(adminDoc, {
+          email,
+          role: USER_ROLES.ADMIN,
+          createdAt: new Date().toISOString(),
+          lastLogin: new Date().toISOString()
+        });
+        console.log(`Admin account initialized for ${email}`);
+      }
     } catch (error) {
       console.error(`Error initializing admin account for ${email}:`, error);
     }
+  }
+};
+
+// Error handling for Firebase operations
+export const handleFirebaseError = (error) => {
+  console.error('Firebase error:', error);
+  
+  switch (error.code) {
+    case 'auth/email-already-in-use':
+      return 'This email is already registered. Please login instead.';
+    case 'auth/invalid-email':
+      return 'Invalid email address.';
+    case 'auth/operation-not-allowed':
+      return 'Operation not allowed. Please contact support.';
+    case 'auth/weak-password':
+      return 'Password is too weak. Please use a stronger password.';
+    case 'auth/user-disabled':
+      return 'This account has been disabled. Please contact support.';
+    case 'auth/user-not-found':
+      return 'No account found with this email.';
+    case 'auth/wrong-password':
+      return 'Incorrect password.';
+    case 'auth/too-many-requests':
+      return 'Too many attempts. Please try again later.';
+    default:
+      return 'An error occurred. Please try again.';
   }
 };

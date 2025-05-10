@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { auth, db, isAdmin, USER_ROLES, initializeAdminAccounts } from '../firebase';
+import { auth, db, isAdmin, USER_ROLES, initializeAdminAccounts, handleFirebaseError } from '../firebase';
 import ForgotPasswordModal from "./ForgotPasswordModal";
 
 const Login = () => {
@@ -26,7 +26,14 @@ const Login = () => {
 
   // Initialize admin accounts on component mount
   useEffect(() => {
-    initializeAdminAccounts();
+    const init = async () => {
+      try {
+        await initializeAdminAccounts();
+      } catch (error) {
+        console.error('Error initializing admin accounts:', error);
+      }
+    };
+    init();
   }, []);
 
   const handleSellerDetailsChange = (e) => {
@@ -43,6 +50,16 @@ const Login = () => {
     setLoading(true);
 
     try {
+      // Validate email
+      if (!email || !email.includes('@')) {
+        throw new Error('Please enter a valid email address');
+      }
+
+      // Validate password
+      if (!password || password.length < 6) {
+        throw new Error('Password must be at least 6 characters long');
+      }
+
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
@@ -81,7 +98,7 @@ const Login = () => {
       }
     } catch (error) {
       console.error('Login error:', error);
-      setError('Failed to login. Please check your credentials.');
+      setError(handleFirebaseError(error));
     } finally {
       setLoading(false);
     }
@@ -92,24 +109,35 @@ const Login = () => {
     setError('');
     setLoading(true);
 
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
-      setLoading(false);
-      return;
-    }
-
     try {
+      // Validate email
+      if (!email || !email.includes('@')) {
+        throw new Error('Please enter a valid email address');
+      }
+
+      // Validate password
+      if (!password || password.length < 6) {
+        throw new Error('Password must be at least 6 characters long');
+      }
+
+      if (password !== confirmPassword) {
+        throw new Error('Passwords do not match');
+      }
+
       // Check if email is admin email
       if (isAdmin(email)) {
-        setError('This email is reserved for admin accounts. Please use a different email.');
-        setLoading(false);
-        return;
+        throw new Error('This email is reserved for admin accounts. Please use a different email.');
       }
 
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
       if (isSeller) {
+        // Validate seller details
+        if (!sellerDetails.brandName || !sellerDetails.businessType || !sellerDetails.phone || !sellerDetails.address) {
+          throw new Error('Please fill in all required seller details');
+        }
+
         // Create seller request
         await setDoc(doc(db, "sellerRequests", user.uid), {
           email: user.email,
@@ -138,11 +166,7 @@ const Login = () => {
       }
     } catch (error) {
       console.error('Registration error:', error);
-      if (error.code === 'auth/email-already-in-use') {
-        setError('This email is already registered. Please login instead.');
-      } else {
-        setError('Failed to register. Please try again.');
-      }
+      setError(handleFirebaseError(error));
     } finally {
       setLoading(false);
     }

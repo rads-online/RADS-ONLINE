@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { signInWithPopup } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { auth, db, isAdmin, USER_ROLES } from '../firebase';
+import { auth, db, isAdmin, USER_ROLES, googleProvider } from '../firebase';
 
 const Login = () => {
   const [error, setError] = useState('');
@@ -15,14 +15,15 @@ const Login = () => {
     setLoading(true);
 
     try {
-      const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider);
+      const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
 
       // Check if user is admin
       if (isAdmin(user.email)) {
         await setDoc(doc(db, "users", user.uid), {
           email: user.email,
+          displayName: user.displayName,
+          photoURL: user.photoURL,
           role: USER_ROLES.ADMIN,
           lastLogin: new Date().toISOString()
         }, { merge: true });
@@ -82,7 +83,15 @@ const Login = () => {
       }
     } catch (error) {
       console.error('Google sign-in error:', error);
-      setError('Failed to sign in with Google. Please try again.');
+      if (error.code === 'auth/popup-closed-by-user') {
+        setError('Sign-in was cancelled. Please try again.');
+      } else if (error.code === 'auth/popup-blocked') {
+        setError('Pop-up was blocked by your browser. Please allow pop-ups for this site.');
+      } else if (error.code === 'auth/cancelled-popup-request') {
+        setError('Multiple sign-in attempts detected. Please try again.');
+      } else {
+        setError('Failed to sign in with Google. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
